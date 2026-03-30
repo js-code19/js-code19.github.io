@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown → HTML Converter</title>
+
+    <!-- GitHub Markdown Dark Theme -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown-dark.min.css" />
+
+    <style>
+        body {
+            font-family: sans-serif;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #sidebar {
+            padding: 20px;
+            background: #111;
+            color: #eee;
+            border-right: 1px solid #333;
+            overflow-y: auto;
+        }
+
+        #preview {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .markdown-body {
+            padding: 20px;
+            background: #0d1117;
+        }
+
+        input,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            border: none;
+        }
+
+        button {
+            background: #238636;
+            color: white;
+            cursor: col-resize;
+        }
+
+        button:hover {
+            background: #2ea043;
+        }
+
+        details {
+            margin-bottom: 1rem;
+        }
+
+        /* Light Mode */
+        body.light #sidebar {
+            background: #f5f5f5;
+            color: #111;
+            border-right: 1px solid #ccc;
+        }
+
+        body.light .markdown-body {
+            background: #ffffff;
+            color: #000;
+        }
+
+        body.light button {
+            background: #0969da;
+        }
+
+        body,
+        #sidebar,
+        .markdown-body {
+            transition: background 0.4s ease, color 0.4s ease;
+        }
+
+        #toggleTheme {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            background: #238636;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        #toggleTheme:hover {
+            transform: rotate(20deg) scale(1.1);
+            opacity: 0.9;
+        }
+
+        .icon-animate {
+            animation: spinFade 0.6s ease;
+        }
+
+        @keyframes spinFade {
+            0% {
+                opacity: 0;
+                transform: rotate(-180deg) scale(0.5);
+            }
+
+            100% {
+                opacity: 1;
+                transform: rotate(0deg) scale(1);
+            }
+        }
+    </style>
+    <!-- GitHub Markdown Light Theme -->
+    <link id="lightTheme" rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown-light.min.css"
+        disabled />
+</head>
+
+<body>
+    <div id="sidebar">
+        <h2>Upload Markdown</h2>
+        <button id="toggleTheme">🌙</button>
+        <input type="file" id="fileInput" accept=".md, .markdown, .txt" />
+        <button id="downloadPdf">Download PDF</button>
+    </div>
+
+    <div id="preview" class="markdown-body"></div>
+
+    <!-- Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- html2pdf for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        // Collapse syntax: any heading ending with " ▼" becomes collapsible section
+        function applyCollapsibility(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+
+            const headings = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
+
+            headings.forEach(h => {
+                if (h.textContent.trim().endsWith("▼")) {
+                    const title = h.textContent.replace("▼", "").trim();
+
+                    const details = document.createElement("details");
+                    const summary = document.createElement("summary");
+                    summary.textContent = title;
+
+                    const contentWrapper = document.createElement("div");
+
+                    let next = h.nextSibling;
+                    while (next && !(next.tagName && next.tagName.match(/^H[1-6]$/))) {
+                        const toMove = next;
+                        next = next.nextSibling;
+                        contentWrapper.appendChild(toMove);
+                    }
+
+                    details.appendChild(summary);
+                    details.appendChild(contentWrapper);
+
+                    h.replaceWith(details);
+                }
+            });
+
+            return doc.body.innerHTML;
+        }
+
+        document.getElementById("toggleTheme").addEventListener("click", () => {
+            const body = document.body;
+            const lightTheme = document.getElementById("lightTheme");
+            const darkTheme = document.querySelector("link[href*='github-markdown-dark']");
+
+            body.classList.toggle('light');
+
+            const toggleBtn = document.getElementById('toggleTheme');
+
+            if (body.classList.contains('light')) {
+                lightTheme.disabled = false;
+                darkTheme.disabled = true;
+                toggleBtn.textContent = '☀️'; toggleBtn.classList.add('icon-animate'); setTimeout(() => toggleBtn.classList.remove('icon-animate'), 600);
+            } else {
+                lightTheme.disabled = true;
+                darkTheme.disabled = false;
+                toggleBtn.textContent = '🌙'; toggleBtn.classList.add('icon-animate'); setTimeout(() => toggleBtn.classList.remove('icon-animate'), 600);
+            } ('light');
+
+            if (body.classList.contains('light')) {
+                lightTheme.disabled = false;
+                darkTheme.disabled = true;
+            } else {
+                lightTheme.disabled = true;
+                darkTheme.disabled = false;
+            }
+        });
+
+        document.getElementById("fileInput").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const text = await file.text();
+
+            let html = marked.parse(text);
+            html = applyCollapsibility(html);
+
+            document.getElementById("preview").innerHTML = html;
+        });
+
+        document.getElementById("downloadPdf").addEventListener("click", () => {
+            const element = document.getElementById("preview");
+            html2pdf().from(element).save('documentation.pdf');
+        });
+    </script>
+</body>
+
+</html>
